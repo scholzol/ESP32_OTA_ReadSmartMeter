@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"name": "ESP32_OTA_Template @ 00f984a",
+			"uri": "gitlens://7b22726566223a2230306639383461623931383066386662333463653466373734313935326330663536373931613562222c227265706f50617468223a22633a2f55736572732f6f6c61662f446f63756d656e74732f506c6174666f726d494f2f50726f6a656374732f45535033325f4f54415f54656d706c617465227d/c:/Users/olaf/Documents/PlatformIO/Projects/ESP32_OTA_Template?{\"ref\":\"00f984a\"}"
+		}
+	],
+	"settings": {
+		"gitlens.views.repositories.includeWorkingTree": true
+	}
+}
