@@ -1,7 +1,7 @@
 /**
  * @file main.cpp
  * @author Olaf Scholz (olaf.scholz@online.de)
- * @brief 
+ * @brief  read data from S0- interface of a smart meter via IR
  * @version 0.1
  * @date 2023-02-04
  * 
@@ -44,6 +44,40 @@ const char* ntpServer = "pool.ntp.org";
 const long  gmtOffset_sec = 3600;
 const int   daylightOffset_sec = 3600;
 
+#define BAUD_RATE 300
+#define TX2 17
+#define RX2 16
+#define SERIAL_MODE2 SERIAL_7E1
+
+typedef struct values_t {
+	uint32_t electricityID;
+	uint8_t billingPeriod;
+	uint32_t activeFirmware;
+	uint32_t timeSwitchPrgmNo;
+	uint32_t localTime;
+	uint32_t localDate;
+	float sumPower1;
+	float sumPower2;
+	float sumPower3;
+	float power;
+	float U_L1;
+	float U_L2;
+	float U_L3;
+	uint32_t deviceNo;
+	uint8_t freqL1;
+	uint8_t freqL2;
+	uint8_t freqL3;
+} values_t;
+
+char sendBuffer[100];
+char retBuffer[101];
+char *p_retBuffer = retBuffer;
+char tmpVal[9];	// 8 Char + \0
+
+values_t values;
+
+time_t systime;
+
 
 // define global variables end ======================================================================================
 
@@ -59,6 +93,54 @@ void printLocalTime(){
   Serial.println();
 }
 
+int sendbytes (char * Buffer, int Count )
+
+  {
+  int sent;
+
+  sent = Serial2.write (Buffer, Count );
+  if ( sent < 0 )
+    {
+    perror ( "sendbytes failed - error!" );
+    return false;
+    }
+  if ( sent < Count )
+    {
+    perror ( "sendbytes failed - truncated!" );
+    }
+  return sent;
+  }
+
+int receiveBytes ( char * retBuffer ) {
+
+	char buf[101], c;
+	int count, i = 0;
+	        
+	do {
+
+		count =	Serial2.read ((void*)&c, 1 );
+		if ( c == 0x3 ) {	// ETX
+				return false;
+		}
+
+		if ( count > 0 ) {
+			if ( c  != '\r' && c != '\n')
+				buf[i++] = c;
+		}
+		
+	} while ( c != '\n' && i < 100 && count >= 0 );
+
+	if ( count < 0 ) perror ( "Read failed!" );
+	else if ( i == 0 ) perror ( "No data!" );
+	else {
+	  buf[i] = '\0';
+	  snprintf ( retBuffer, i + 1, buf );
+	  //printf (" %i Bytes: %s", i, buf );
+	}
+
+	return true;
+
+}
 // helper functions end ========================================================================================
 
 
@@ -83,6 +165,7 @@ void setup() {
   Serial.printf("Flash Chip Speed : %d \n", ESP.getFlashChipSpeed());
   Serial.printf("ESP32-%06lX\n", chipId);
   
+  Serial2.begin(BAUD_RATE, SERIAL_MODE2, RX2, TX2);
 
   esp_chip_info_t chip_info;
   esp_chip_info(&chip_info);
@@ -136,6 +219,116 @@ void loop() {
 // OTA loop ####################################
   ArduinoOTA.handle();
 // OTA loop ####################################
+
+
+// smart meter reading begin --------------------------------------------------------------------------------------
+  sprintf ( sendBuffer, "/?!\r\n" );
+  sendbytes (sendBuffer, 5 );
+  printf ( "Identification: " );
+  receiveBytes ( fd, p_retBuffer );
+  printf ( "%s", retBuffer );
+  printf ( "\r\n" );
+
+  usleep ( 3000000 );	// 300msec
+  printf ( "Sending ACK...   ");
+  sprintf ( sendBuffer, "%c040\r\n", 0x06 );
+  sendbytes (sendBuffer, strlen ( sendBuffer ) );
+
+  receiveBytes ( p_retBuffer );
+  printf ( "Response: %s\r\n", retBuffer );
+
+  //usleep(300000);	// 300msec
+
+  while ( receiveBytes ( p_retBuffer ) ) {
+    if ( strncasecmp ( retBuffer, "0.0.0", 5) == 0 ) {
+      snprintf ( tmpVal, 9, "%.*s", 8, retBuffer + 6 );
+      printf ( "Electricity id: %i  rawdata: %s\n", atoi( tmpVal ), retBuffer );
+      values.electricityID = atoi ( tmpVal );
+    }
+    if ( strncasecmp ( retBuffer, "0.1.0", 5) == 0 ) {
+      snprintf ( tmpVal, 3, "%.*s", 2, retBuffer + 6 );
+      printf ( "Billing period: %i  rawdata: %s\n", atoi( tmpVal ), retBuffer );
+      values.billingPeriod = atoi ( tmpVal );
+    }
+    if ( strncasecmp ( retBuffer, "0.2.0", 5) == 0 ) {
+      snprintf ( tmpVal, 9, "%.*s", 8, retBuffer + 6 );
+      printf ( "Active firmware: %i  rawdata: %s\n", atoi( tmpVal ), retBuffer );
+      values.activeFirmware = atoi ( tmpVal );
+    }
+    if ( strncasecmp ( retBuffer, "0.2.2", 5) == 0 ) {
+      snprintf ( tmpVal, 9, "%.*s", 8, retBuffer + 6 );
+      printf ( "Time switch prgm no.: %i  rawdata: %s\n", atoi( tmpVal ), retBuffer );
+      values.timeSwitchPrgmNo = atoi ( tmpVal );
+    }
+    if ( strncasecmp ( retBuffer, "0.9.1", 5) == 0 ) {
+      snprintf ( tmpVal, 8, "%.*s", 7, retBuffer + 6 );
+      printf ( "Time: %i  rawdata: %s\n", atoi( tmpVal ), retBuffer );
+      values.localTime = atoi ( tmpVal );
+    }
+    if ( strncasecmp ( retBuffer, "0.9.2", 5) == 0 ) {
+      snprintf ( tmpVal, 8, "%.*s", 7, retBuffer + 6 );
+      printf ( "Date: %i  rawdata: %s\n", atoi( tmpVal ), retBuffer );
+      values.localDate = atoi ( tmpVal );
+    }
+    if ( strncasecmp ( retBuffer, "1.8.0", 5) == 0 ) {
+      snprintf ( tmpVal, 9, "%.*s", 8, retBuffer + 6 );
+      printf ( "Sum Power 1: %08.1f  rawdata: %s\n", atof( tmpVal ), retBuffer );
+      values.sumPower1 = atof ( tmpVal );
+    }
+    if ( strncasecmp ( retBuffer, "1.8.1", 5) == 0 ) {
+      snprintf ( tmpVal, 9, "%.*s", 8, retBuffer + 6 );
+      printf ( "Sum Power 2: %08.1f  rawdata: %s\n", atof( tmpVal ), retBuffer );
+      values.sumPower2 = atof ( tmpVal );
+    }
+    if ( strncasecmp ( retBuffer, "1.8.2", 5) == 0 ) {
+      snprintf ( tmpVal, 9, "%.*s", 8, retBuffer + 6 );
+      printf ( "Sum Power 3: %08.1f  rawdata: %s\n", atof( tmpVal ), retBuffer );
+      values.sumPower3 = atof ( tmpVal );
+    }
+    if ( strncasecmp ( retBuffer, "1.25", 4) == 0 )  {
+      snprintf ( tmpVal, 6, "%.*s", 5, retBuffer + 5 );
+      printf ( "Power: %05.2f  rawdata: %s\n", atof( tmpVal ), retBuffer );
+      values.power = atof ( tmpVal );
+    }
+    if ( strncasecmp ( retBuffer, "32.25", 5) == 0 ) {
+      snprintf ( tmpVal, 6, "%.*s", 5, retBuffer + 6 );
+      printf ( "U L1: %05.1f  rawdata: %s\n", atof( tmpVal ), retBuffer );
+      values.U_L1 = atof ( tmpVal );
+    }
+    if ( strncasecmp ( retBuffer, "52.25", 5) == 0 ) {
+      snprintf ( tmpVal, 6, "%.*s", 5, retBuffer + 6 );
+      printf ( "U L2: %05.1f  rawdata: %s\n", atof( tmpVal ), retBuffer );
+      values.U_L2 = atof ( tmpVal );
+    }
+    if ( strncasecmp ( retBuffer, "72.25", 5) == 0 ) {
+      snprintf ( tmpVal, 6, "%.*s", 5, retBuffer + 6 );
+      printf ( "U L3: %05.1f  rawdata: %s\n", atof( tmpVal ), retBuffer );
+      values.U_L3 = atof ( tmpVal );
+    }
+    if ( strncasecmp ( retBuffer, "C.1.0", 5) == 0 ) {
+      snprintf ( tmpVal, 9, "%.*s", 8, retBuffer + 6 );
+      printf ( "Device No.: %i  rawdata: %s\n", atoi( tmpVal ), retBuffer );
+      values.deviceNo = atoi ( tmpVal );
+    }
+    if ( strncasecmp ( retBuffer, "C.7.1", 5) == 0 ) {
+      snprintf ( tmpVal, 5, "%.*s", 4, retBuffer + 6 );
+      printf ( "Freq. L1: %li  rawdata: %s\n", strtol( tmpVal, NULL, 16 ), retBuffer );
+      values.freqL1 = strtol( tmpVal, NULL, 16 );
+    }
+    if ( strncasecmp ( retBuffer, "C.7.2", 5) == 0 ) {
+      snprintf ( tmpVal, 5, "%.*s", 4, retBuffer + 6 );
+      printf ( "Freq. L2: %li  rawdata: %s\n", strtol( tmpVal, NULL, 16 ), retBuffer );
+      values.freqL2 = strtol( tmpVal, NULL, 16 );
+    }
+    if ( strncasecmp ( retBuffer, "C.7.3", 5) == 0 ) {
+      snprintf ( tmpVal, 5, "%.*s", 4, retBuffer + 6 );
+      printf ( "Freq. L3: %li  rawdata: %s\n", strtol( tmpVal, NULL, 16 ), retBuffer );
+      values.freqL3 = strtol( tmpVal, NULL, 16 );
+    }
+
+  }
+// smart meter reading end ========================================================================================
+
 
 // initialize WebClient
 
