@@ -101,13 +101,14 @@ int sendbytes (char * Buffer, int Count )
   sent = Serial2.write (Buffer, Count );
   if ( sent < 0 )
     {
-    perror ( "sendbytes failed - error!" );
+    Serial.printf ( "sendbytes failed - error!" );
     return false;
     }
   if ( sent < Count )
     {
-    perror ( "sendbytes failed - truncated!" );
+    Serial.printf ( "sendbytes failed - truncated!" );
     }
+  Serial.printf("sendbytes successful");
   return sent;
   }
 
@@ -118,7 +119,7 @@ int receiveBytes ( char * retBuffer ) {
 	        
 	do {
 
-		count =	Serial2.read ((void*)&c, 1 );
+		count =	Serial2.read (&c, 1 );
 		if ( c == 0x3 ) {	// ETX
 				return false;
 		}
@@ -130,17 +131,16 @@ int receiveBytes ( char * retBuffer ) {
 		
 	} while ( c != '\n' && i < 100 && count >= 0 );
 
-	if ( count < 0 ) perror ( "Read failed!" );
-	else if ( i == 0 ) perror ( "No data!" );
+	if ( count < 0 ) Serial.println ( "Read failed!" );
+	else if ( i == 0 ) Serial.println ( "No data!" );
 	else {
 	  buf[i] = '\0';
 	  snprintf ( retBuffer, i + 1, buf );
-	  //printf (" %i Bytes: %s", i, buf );
+	  Serial.printf (" %i Bytes: %s", i, buf );
 	}
-
-	return true;
-
+ 	return true;
 }
+
 // helper functions end ========================================================================================
 
 
@@ -220,14 +220,15 @@ void loop() {
   ArduinoOTA.handle();
 // OTA loop ####################################
 
-
+  Serial.printf("start reading ....");
 // smart meter reading begin --------------------------------------------------------------------------------------
   sprintf ( sendBuffer, "/?!\r\n" );
   sendbytes (sendBuffer, 5 );
   printf ( "Identification: " );
-  receiveBytes ( fd, p_retBuffer );
+  receiveBytes ( p_retBuffer );
   printf ( "%s", retBuffer );
   printf ( "\r\n" );
+/**
 
   usleep ( 3000000 );	// 300msec
   printf ( "Sending ACK...   ");
@@ -327,6 +328,7 @@ void loop() {
     }
 
   }
+  **/
 // smart meter reading end ========================================================================================
 
 
