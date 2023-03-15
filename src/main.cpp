@@ -50,15 +50,19 @@ const int   daylightOffset_sec = 3600;
 #define SERIAL_MODE2 SERIAL_7E1
 
 typedef struct values_t {
-	uint32_t electricityID;
+	uint32_t electricityID1;
+	uint32_t electricityID2;
 	uint8_t billingPeriod;
 	uint32_t activeFirmware;
 	uint32_t timeSwitchPrgmNo;
 	uint32_t localTime;
 	uint32_t localDate;
-	float sumPower1;
-	float sumPower2;
-	float sumPower3;
+	float sumPower11;
+	float sumPower12;
+	float sumPower13;
+	float sumPower21;
+	float sumPower22;
+	float sumPower23;
 	float power;
 	float U_L1;
 	float U_L2;
@@ -70,7 +74,7 @@ typedef struct values_t {
 } values_t;
 
 char sendBuffer[100];
-char retBuffer[101];
+char retBuffer[1001];
 char *p_retBuffer = retBuffer;
 char tmpVal[9];	// 8 Char + \0
 
@@ -114,7 +118,7 @@ int sendbytes (char * Buffer, int Count )
 
 int receiveBytes ( char * retBuffer ) {
 
-	char buf[101], c;
+	char buf[1001], c;
 	int count, i = 0;
 	        
 	do {
@@ -129,7 +133,7 @@ int receiveBytes ( char * retBuffer ) {
 				buf[i++] = c;
 		}
 		
-	} while ( c != '\n' && i < 100 && count >= 0 );
+	} while ( c != '\n' && i < 1000 && count >= 0 );
 
 	if ( count < 0 ) Serial.println ( "Read failed!" );
 	else if ( i == 0 ) Serial.println ( "No data!" );
@@ -209,6 +213,24 @@ void setup() {
   server.begin();
   // insert or update the board table for the ESP32 bords in the MySQL database
   updateBoardTable(ssidesp32);
+
+// smart meter init begin --------------------------------------------------------------------------------------
+  /**
+  Serial.printf("start reading ....");
+  sprintf ( sendBuffer, "/?!\r\n" );
+  sendbytes (sendBuffer, 5 );
+  usleep ( 3000000 );	// 300msec
+  printf ( "Identification: " );
+  receiveBytes ( p_retBuffer );
+  printf ( "%s", retBuffer );
+  printf ( "\r\n" );
+  usleep ( 3000000 );	// 300msec
+  printf ( "Sending ACK...   ");
+  sprintf ( sendBuffer, "%c040\r\n", 0x06 );
+  sendbytes (sendBuffer, strlen ( sendBuffer ) );
+  receiveBytes ( p_retBuffer );
+  printf ( "Response: %s\r\n", retBuffer );
+  **/
 }
 // setup end =============================================================================================
 
@@ -220,31 +242,24 @@ void loop() {
   ArduinoOTA.handle();
 // OTA loop ####################################
 
-  Serial.printf("start reading ....");
 // smart meter reading begin --------------------------------------------------------------------------------------
+
+  Serial.printf("start reading ....");
   sprintf ( sendBuffer, "/?!\r\n" );
   sendbytes (sendBuffer, 5 );
-  printf ( "Identification: " );
-  receiveBytes ( p_retBuffer );
-  printf ( "%s", retBuffer );
-  printf ( "\r\n" );
-/**
-
   usleep ( 3000000 );	// 300msec
-  printf ( "Sending ACK...   ");
-  sprintf ( sendBuffer, "%c040\r\n", 0x06 );
-  sendbytes (sendBuffer, strlen ( sendBuffer ) );
-
-  receiveBytes ( p_retBuffer );
-  printf ( "Response: %s\r\n", retBuffer );
-
-  //usleep(300000);	// 300msec
+//  usleep(100000);	// 300msec
 
   while ( receiveBytes ( p_retBuffer ) ) {
     if ( strncasecmp ( retBuffer, "0.0.0", 5) == 0 ) {
       snprintf ( tmpVal, 9, "%.*s", 8, retBuffer + 6 );
-      printf ( "Electricity id: %i  rawdata: %s\n", atoi( tmpVal ), retBuffer );
-      values.electricityID = atoi ( tmpVal );
+      printf ( "Electricity id 1: %i  rawdata: %s\n", atoi( tmpVal ), retBuffer );
+      values.electricityID1 = atoi ( tmpVal );
+    }
+    if ( strncasecmp ( retBuffer, "0.0.1", 5) == 0 ) {
+      snprintf ( tmpVal, 9, "%.*s", 8, retBuffer + 6 );
+      printf ( "Electricity id 2: %i  rawdata: %s\n", atoi( tmpVal ), retBuffer );
+      values.electricityID2 = atoi ( tmpVal );
     }
     if ( strncasecmp ( retBuffer, "0.1.0", 5) == 0 ) {
       snprintf ( tmpVal, 3, "%.*s", 2, retBuffer + 6 );
@@ -274,17 +289,32 @@ void loop() {
     if ( strncasecmp ( retBuffer, "1.8.0", 5) == 0 ) {
       snprintf ( tmpVal, 9, "%.*s", 8, retBuffer + 6 );
       printf ( "Sum Power 1: %08.1f  rawdata: %s\n", atof( tmpVal ), retBuffer );
-      values.sumPower1 = atof ( tmpVal );
+      values.sumPower11 = atof ( tmpVal );
     }
     if ( strncasecmp ( retBuffer, "1.8.1", 5) == 0 ) {
       snprintf ( tmpVal, 9, "%.*s", 8, retBuffer + 6 );
       printf ( "Sum Power 2: %08.1f  rawdata: %s\n", atof( tmpVal ), retBuffer );
-      values.sumPower2 = atof ( tmpVal );
+      values.sumPower12 = atof ( tmpVal );
     }
     if ( strncasecmp ( retBuffer, "1.8.2", 5) == 0 ) {
       snprintf ( tmpVal, 9, "%.*s", 8, retBuffer + 6 );
       printf ( "Sum Power 3: %08.1f  rawdata: %s\n", atof( tmpVal ), retBuffer );
-      values.sumPower3 = atof ( tmpVal );
+      values.sumPower13 = atof ( tmpVal );
+    }
+    if ( strncasecmp ( retBuffer, "2.8.0", 5) == 0 ) {
+      snprintf ( tmpVal, 9, "%.*s", 8, retBuffer + 6 );
+      printf ( "Sum Power 1: %08.1f  rawdata: %s\n", atof( tmpVal ), retBuffer );
+      values.sumPower21 = atof ( tmpVal );
+    }
+    if ( strncasecmp ( retBuffer, "2.8.1", 5) == 0 ) {
+      snprintf ( tmpVal, 9, "%.*s", 8, retBuffer + 6 );
+      printf ( "Sum Power 2: %08.1f  rawdata: %s\n", atof( tmpVal ), retBuffer );
+      values.sumPower22 = atof ( tmpVal );
+    }
+    if ( strncasecmp ( retBuffer, "2.8.2", 5) == 0 ) {
+      snprintf ( tmpVal, 9, "%.*s", 8, retBuffer + 6 );
+      printf ( "Sum Power 3: %08.1f  rawdata: %s\n", atof( tmpVal ), retBuffer );
+      values.sumPower23 = atof ( tmpVal );
     }
     if ( strncasecmp ( retBuffer, "1.25", 4) == 0 )  {
       snprintf ( tmpVal, 6, "%.*s", 5, retBuffer + 5 );
@@ -328,7 +358,6 @@ void loop() {
     }
 
   }
-  **/
 // smart meter reading end ========================================================================================
 
 

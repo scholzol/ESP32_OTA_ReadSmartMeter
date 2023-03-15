@@ -1,4 +1,4 @@
 #define SemanticVersion "0.1.0"
-#define SHA_short "69f9bfd"
-#define FullBuildMetaData "2.Branch.master.Sha.69f9bfdbc459487e019f66a7d4ba37ad4c5fa76e"
+#define SHA_short "cb13380"
+#define FullBuildMetaData "4.Branch.master.Sha.cb13380aaf21f4413cf429f1a552181c0b6d8378"
 #define WorkingDirectory "ESP32_OTA_ReadSmartMeter"
