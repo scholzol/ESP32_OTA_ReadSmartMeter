@@ -74,7 +74,7 @@ typedef struct values_t {
 } values_t;
 
 char sendBuffer[100];
-char retBuffer[1001];
+char retBuffer[101];
 char *p_retBuffer = retBuffer;
 char tmpVal[9];	// 8 Char + \0
 
@@ -118,7 +118,7 @@ int sendbytes (char * Buffer, int Count )
 
 int receiveBytes ( char * retBuffer ) {
 
-	char buf[1001], c;
+	char buf[101], c;
 	int count, i = 0;
 	        
 	do {
@@ -133,7 +133,7 @@ int receiveBytes ( char * retBuffer ) {
 				buf[i++] = c;
 		}
 		
-	} while ( c != '\n' && i < 1000 && count >= 0 );
+	} while ( c != '\n' && i < 100 && count >= 0 );
 
 	if ( count < 0 ) Serial.println ( "Read failed!" );
 	else if ( i == 0 ) Serial.println ( "No data!" );
