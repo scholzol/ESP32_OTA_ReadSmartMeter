@@ -284,34 +284,33 @@ void readSmartMeter() {
       printf ( "Freq. L3: %li  rawdata: %s\n", strtol( tmpVal, NULL, 16 ), retBuffer );
       values.freqL3 = strtol( tmpVal, NULL, 16 );
     }
-    char default_database[] = "olaf";            // database for olaf's information1
-    char default_table[]    = "smartmeter";           // table for smartmeter information
-
-    String INSERT_SQL = String("INSERT INTO ") + default_database + "." + default_table  + " (sumPower11,sumPower12,sumPower13,sumPower21,sumPower22,sumPower23) VALUES ('" 
-      + String(values.sumPower11) + "','"
-      + String(values.sumPower12) + "','" 
-      + String(values.sumPower13) + "','" 
-      + String(values.sumPower21) + "','" 
-      + String(values.sumPower22) + "','" 
-      + String(values.sumPower23) + "','" 
-      + "')";
-
-    MySQL_Query query_mem = MySQL_Query(&conn);
-    if (conn.connectNonBlocking(MySQLserver, server_port, user, passwd) != RESULT_FAIL)
-    {
-        delay(500);
-        if (conn.connected())
-        {
-          MYSQL_DISPLAY(INSERT_SQL);
-          if ( !query_mem.execute(INSERT_SQL.c_str()) )
-          {
-            MYSQL_DISPLAY("INSERT_SQL error");
-            return;
-          }
-        }
-    }
-
   }
+  char default_database[] = "olaf";            // database for olaf's information1
+  char default_table[]    = "smartmeter";           // table for smartmeter information
+
+  String INSERT_SQL = String("INSERT INTO ") + default_database + "." + default_table  + " (sumPower11,sumPower12,sumPower13,sumPower21,sumPower22,sumPower23) VALUES ('" 
+    + String(values.sumPower11) + "','"
+    + String(values.sumPower12) + "','" 
+    + String(values.sumPower13) + "','" 
+    + String(values.sumPower21) + "','" 
+    + String(values.sumPower22) + "','" 
+    + String(values.sumPower23) + "')";
+
+  MySQL_Query query_mem = MySQL_Query(&conn);
+  if (conn.connectNonBlocking(MySQLserver, server_port, user, passwd) != RESULT_FAIL)
+  {
+      delay(500);
+      if (conn.connected())
+      {
+        MYSQL_DISPLAY(INSERT_SQL);
+        if ( !query_mem.execute(INSERT_SQL.c_str()) )
+        {
+          MYSQL_DISPLAY("INSERT_SQL error");
+          return;
+        }
+      }
+  }
+
 }
 // smart meter reading end ========================================================================================
 
