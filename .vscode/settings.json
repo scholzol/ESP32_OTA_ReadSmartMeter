@@ -49,5 +49,9 @@
         "streambuf": "cpp",
         "cinttypes": "cpp",
         "typeinfo": "cpp"
-    }
+    },
+    "python.autoComplete.extraPaths": [
+    
+    ],
+    "cmake.sourceDirectory": "${workspaceFolder}/.pio/libdeps/az-delivery-devkit-v4-Serial/Unity"
 }
