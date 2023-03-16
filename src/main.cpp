@@ -15,11 +15,13 @@
 // OTA Header ####################################
 #include "OTA.h"
 // OTA Header ####################################
-
 #include <credentials.h> // Wifi SSID and password
 #include <Version.h> // contains version information
 
-#include "updateBoardTable.h"
+#include <MySQL_Generic.h>
+#include <MySQL_credentials.h>
+#include <algorithm>
+
 // #include section end ============================================================================================
 
 // define global variables begin -----------------------------------------------------------------------------------
@@ -52,6 +54,22 @@ const int   daylightOffset_sec = 3600;
 #define RX2 16
 #define SERIAL_MODE2 SERIAL_7E1
 
+// define MySQL variables
+#define USING_HOST_NAME     false
+
+#if USING_HOST_NAME
+  // Optional using hostname, and Ethernet built-in DNS lookup
+  char MySQLserver[] = "your_account.ddns.net"; // change to your server's hostname/URL
+#else
+  IPAddress MySQLserver(192, 168, 178, 49);
+#endif
+
+uint16_t server_port = 3306;                  //port for the access of the MySQL database (standard:3306);
+
+MySQL_Connection conn((Client *)&client);
+MySQL_Query *query_mem;
+
+time_t timer;
 typedef struct values_t {
 	uint32_t electricityID1;
 	uint32_t electricityID2;
@@ -115,7 +133,7 @@ int sendbytes (char * Buffer, int Count )
     {
     Serial.printf ( "sendbytes failed - truncated!" );
     }
-  Serial.printf("sendbytes successful");
+  Serial.printf("sendbytes successful\n");
   return sent;
   }
 
@@ -143,77 +161,14 @@ int receiveBytes ( char * retBuffer ) {
     else {
       buf[i] = '\0';
       snprintf ( retBuffer, i + 1, buf );
-      Serial.printf (" %i Bytes: %s", i, buf );
+      Serial.printf (" %i Bytes: %s\n", i, buf );
     }
     return true;
   }
+  return true;
 }
-void WebClient() {
-// initialize WebClient
-  WiFiClient client = server.available();   // Listen for incoming clients
+// helper functions end ========================================================================================
 
-  if (client) {                             // If a new client connects,
-    currentTime = millis();
-    previousTime = currentTime;
-    Serial.println("New Client.");          // print a message out in the serial port
-    String currentLine = "";                // make a String to hold incoming data from the client
-    while (client.connected() && currentTime - previousTime <= timeoutTime) {  // loop while the client's connected
-      currentTime = millis();
-      if (client.available()) {             // if there's bytes to read from the client,
-        char c = client.read();             // read a byte, then
-        Serial.write(c);                    // print it out the serial monitor
-        header += c;
-        if (c == '\n') {                    // if the byte is a newline character
-          // if the current line is blank, you got two newline characters in a row.
-          // that's the end of the client HTTP request, so send a response:
-          if (currentLine.length() == 0) {
-            // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
-            // and a content-type so the client knows what's coming, then a blank line:
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-type:text/html");
-            client.println("Connection: close");
-            client.println();
-            
-            // Display the HTML web page
-            client.println("<!DOCTYPE html><html>");
-            // Web Page Heading
-            client.println("<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
-            // Feel free to change style properties to fit your preferences
-            client.println("<style>");
-            client.println("html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}");
-            client.println("h1 {background-color: powderblue;}");
-            client.println("</style>");
-            client.println("</head>");
-
-            // Web Page body
-            client.println("<body>");
-            client.println("<h1>Board info</h1>");
-            client.println("<p>Semantic Version: " + String(SemanticVersion) + "</p>");
-            client.println("<p>short commit SHA: " + String(SHA_short) + "</p>");
-            client.println("<p>working directory: " + String(WorkingDirectory) + "</p>");
-            client.println("<p>ChipID: " + String(ssidesp32) + "</p>");
-            client.println("</body>");
-            client.println("</html>");
-
-            // The HTTP response ends with another blank line
-            client.println();
-            // Break out of the while loop
-            break;
-          } else { // if you got a newline, then clear currentLine
-            currentLine = "";
-          }
-        } else if (c != '\r') {  // if you got anything else but a carriage return character,
-          currentLine += c;      // add it to the end of the currentLine
-        }
-      }
-    }
-    // Clear the header variable
-    header = "";
-    // Close the connection
-    client.stop();
-  }
-
-}
 void readSmartMeter() {
 // smart meter reading begin --------------------------------------------------------------------------------------
 
@@ -329,11 +284,210 @@ void readSmartMeter() {
       printf ( "Freq. L3: %li  rawdata: %s\n", strtol( tmpVal, NULL, 16 ), retBuffer );
       values.freqL3 = strtol( tmpVal, NULL, 16 );
     }
+    char default_database[] = "olaf";            // database for olaf's information1
+    char default_table[]    = "smartmeter";           // table for smartmeter information
+
+    String INSERT_SQL = String("INSERT INTO ") + default_database + "." + default_table  + " (sumPower11,sumPower12,sumPower13,sumPower21,sumPower22,sumPower23) VALUES ('" 
+      + String(values.sumPower11) + "','"
+      + String(values.sumPower12) + "','" 
+      + String(values.sumPower13) + "','" 
+      + String(values.sumPower21) + "','" 
+      + String(values.sumPower22) + "','" 
+      + String(values.sumPower23) + "','" 
+      + "')";
+
+    MySQL_Query query_mem = MySQL_Query(&conn);
+    if (conn.connectNonBlocking(MySQLserver, server_port, user, passwd) != RESULT_FAIL)
+    {
+        delay(500);
+        if (conn.connected())
+        {
+          MYSQL_DISPLAY(INSERT_SQL);
+          if ( !query_mem.execute(INSERT_SQL.c_str()) )
+          {
+            MYSQL_DISPLAY("INSERT_SQL error");
+            return;
+          }
+        }
+    }
 
   }
+}
 // smart meter reading end ========================================================================================
 
+void updateBoardTable(char ssid32[13])
+{
+  char default_database[] = "esp32";            // database for the ESP32 information1
+  char default_table[]    = "boards";           // table for ESP32 Hardware information
+
+    // insert data into MySQL database
+    
+    // Sample query
+    String SELECT_SQL = String("SELECT ChipID FROM ") + default_database + "." + default_table;
+    String INSERT_SQL = String("INSERT INTO ") + default_database + "." + default_table  + " (ChipModel, MAC_Address, IP_Address, ChipID) VALUES ('" + String(ESP.getChipModel()) + "','" + String(WiFi.macAddress()) + "','" + WiFi.localIP().toString() + "','" + ssid32 + "')";
+    String UPDATE_SQL = String("UPDATE ") + default_database + "." + default_table  + " SET ChipModel='" + String(ESP.getChipModel()) + "', MAC_Address='" + String(WiFi.macAddress()) + "', IP_Address='" + WiFi.localIP().toString() + "' WHERE ChipID='" + ssid32 + "'";
+    String rowValues[20]= {" "};
+
+    MySQL_Query query_mem = MySQL_Query(&conn);
+
+    if (conn.connectNonBlocking(MySQLserver, server_port, user, passwd) != RESULT_FAIL)
+    {
+        delay(500);
+        if (conn.connected())
+        {
+        MYSQL_DISPLAY(SELECT_SQL);
+        
+        // Execute the query
+        // KH, check if valid before fetching
+        if ( !query_mem.execute(SELECT_SQL.c_str()) )
+        {
+            MYSQL_DISPLAY("Select error");
+            return;
+        }
+        else
+        {
+            // Fetch the columns and print them
+            column_names *cols = query_mem.get_columns();
+
+            for (int f = 0; f < cols->num_fields; f++)
+            {
+                MYSQL_DISPLAY0(cols->fields[f]->name);
+
+                if (f < cols->num_fields - 1)
+                {
+                MYSQL_DISPLAY0(", ");
+                }
+            }
+            
+            MYSQL_DISPLAY();
+            
+            // Read the rows and print them
+            row_values *row = NULL;
+            int i = 1;
+            do
+            {
+                row = query_mem.get_next_row();
+
+                if (row != NULL)
+                {
+                for (int f = 0; f < cols->num_fields; f++)
+                {
+                    MYSQL_DISPLAY0(row->values[f]);
+                    rowValues[i] = row->values[f];
+                    if (f < cols->num_fields - 1)
+                    {
+                    MYSQL_DISPLAY0(", ");
+                    }
+                }
+                
+                MYSQL_DISPLAY();
+                i++;
+                }
+            } while (row != NULL);
+        }
+        // now check whether the ChipID already exists
+        bool isInArray = false;
+        isInArray = std::find(std::begin(rowValues), std::end(rowValues), ssid32) != std::end(rowValues);
+
+        if (isInArray)
+        {
+            MYSQL_DISPLAY(UPDATE_SQL);
+            if ( !query_mem.execute(UPDATE_SQL.c_str()) )
+            {
+            MYSQL_DISPLAY("UPDATE error");
+            return;
+            }
+        }
+        else
+        {
+            MYSQL_DISPLAY(INSERT_SQL);
+            if ( !query_mem.execute(INSERT_SQL.c_str()) )
+            {
+            MYSQL_DISPLAY("INSERT error");
+            return;
+            }
+
+        }
+    }
+    else
+        {
+        MYSQL_DISPLAY("Disconnected from Server. Can't insert.");
+        }
+        conn.close();
+    }
+    else 
+    {
+        MYSQL_DISPLAY("\nConnect failed. Trying again on next iteration.");
+    }
 }
+
+void WebClient() {
+// initialize WebClient
+  WiFiClient client = server.available();   // Listen for incoming clients
+
+  if (client) {                             // If a new client connects,
+    currentTime = millis();
+    previousTime = currentTime;
+    Serial.println("New Client.");          // print a message out in the serial port
+    String currentLine = "";                // make a String to hold incoming data from the client
+    while (client.connected() && currentTime - previousTime <= timeoutTime) {  // loop while the client's connected
+      currentTime = millis();
+      if (client.available()) {             // if there's bytes to read from the client,
+        char c = client.read();             // read a byte, then
+        Serial.write(c);                    // print it out the serial monitor
+        header += c;
+        if (c == '\n') {                    // if the byte is a newline character
+          // if the current line is blank, you got two newline characters in a row.
+          // that's the end of the client HTTP request, so send a response:
+          if (currentLine.length() == 0) {
+            // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
+            // and a content-type so the client knows what's coming, then a blank line:
+            client.println("HTTP/1.1 200 OK");
+            client.println("Content-type:text/html");
+            client.println("Connection: close");
+            client.println();
+            
+            // Display the HTML web page
+            client.println("<!DOCTYPE html><html>");
+            // Web Page Heading
+            client.println("<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
+            // Feel free to change style properties to fit your preferences
+            client.println("<style>");
+            client.println("html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}");
+            client.println("h1 {background-color: powderblue;}");
+            client.println("</style>");
+            client.println("</head>");
+
+            // Web Page body
+            client.println("<body>");
+            client.println("<h1>Board info</h1>");
+            client.println("<p>Semantic Version: " + String(SemanticVersion) + "</p>");
+            client.println("<p>short commit SHA: " + String(SHA_short) + "</p>");
+            client.println("<p>working directory: " + String(WorkingDirectory) + "</p>");
+            client.println("<p>ChipID: " + String(ssidesp32) + "</p>");
+            client.println("</body>");
+            client.println("</html>");
+
+            // The HTTP response ends with another blank line
+            client.println();
+            // Break out of the while loop
+            break;
+          } else { // if you got a newline, then clear currentLine
+            currentLine = "";
+          }
+        } else if (c != '\r') {  // if you got anything else but a carriage return character,
+          currentLine += c;      // add it to the end of the currentLine
+        }
+      }
+    }
+    // Clear the header variable
+    header = "";
+    // Close the connection
+    client.stop();
+  }
+
+}
+
 // helper functions end ========================================================================================
 
 
