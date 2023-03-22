@@ -309,8 +309,9 @@ void readSmartMeter() {
           return;
         }
       }
-  }
 
+  }
+conn.close();
 }
 // smart meter reading end ========================================================================================
 
@@ -407,6 +408,7 @@ void updateBoardTable(char ssid32[13])
             }
 
         }
+    conn.close();
     }
     else
         {
