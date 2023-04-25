@@ -38,7 +38,7 @@ unsigned long previousTime = 0;
 unsigned long previousLoopTime = 0; 
 // Define timeout time in milliseconds (example: 2000ms = 2s)
 const long timeoutTime = 2000;
-const long writeCycleTime = 60000;
+const long writeCycleTime = 600000;
 char ssidesp32[13];
 uint32_t chipId = 0;
 char str;
