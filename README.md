@@ -20,3 +20,18 @@ const char* ssid = "SSID of your AP";
 const char* password = "Password of your AP";
 ```
 
+## additional measures for platformio.ini - extra_scripts
+
+place a file `mysql_credentials.py`
+
+## access MariaDB
+
+I installed the MySQL_MariaDB_Generic library in my .platformio/lib folder, to serve all projects with that library. To access the database you need an additional file `MySQL_credentials.h`.
+
+The text file `MySQL_credentials.h` looks like:
+
+```c++
+char user[] = "DB_User"; 
+char passwd[] = "DB_User_password";
+```
+

@@ -288,6 +288,14 @@ void readSmartMeter() {
   char default_database[] = "olaf";            // database for olaf's information1
   char default_table[]    = "smartmeter";           // table for smartmeter information
 
+  // check validity of some values
+
+  if (values.sumPower11>300000.0)
+  {
+    values.sumPower11 = values.sumPower12 + values.sumPower13;
+  }
+  
+
   String INSERT_SQL = String("INSERT INTO ") + default_database + "." + default_table  + " (sumPower11,sumPower12,sumPower13,sumPower21,sumPower22,sumPower23) VALUES ('" 
     + String(values.sumPower11) + "','"
     + String(values.sumPower12) + "','" 
@@ -525,13 +533,6 @@ void setup() {
       (chip_info.features & CHIP_FEATURE_IEEE802154) ? "IEEE 802.15.4" : "");
   Serial.println();
 
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  while (WiFi.waitForConnectResult() != WL_CONNECTED) {
-    Serial.println("Connection Failed! Rebooting...");
-    delay(5000);
-    ESP.restart();
-  }
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
   printLocalTime();
 
@@ -549,7 +550,7 @@ void setup() {
 
 // OTA setup begin ####################################
 
-  setupOTA("TemplateSketch", ssid, password);
+  setupOTA();
   
 // OTA setup end ####################################
 

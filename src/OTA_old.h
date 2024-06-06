@@ -19,7 +19,6 @@
 
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
-#include <credentials.h> // Wifi SSID and password
 
 #if defined(ESP32_RTOS) && defined(ESP32)
 void ota_handle( void * parameter ) {
@@ -29,57 +28,35 @@ void ota_handle( void * parameter ) {
   }
 }
 #endif
-void handleWiFi() {
-  int n;
-  int i = 0;
-  int i_strongest = -1;
-  int32_t rssi_strongest = -100;
 
-  n = WiFi.scanNetworks(); // WiFi.scanNetworks will return the number of networks found
-  if (n == 0) {
-    Serial.println("no networks found");
-    } 
-    else  {
-      Serial.print(n);
-      Serial.println(" networks found");
-      for (int i = 0; i < n; ++i) {
-        // Print SSID and RSSI for each network found
-        Serial.print(i + 1);
-        Serial.print(": ");
-        Serial.print("BSSID: ");
-        Serial.print(WiFi.BSSIDstr(i));
-        Serial.print("  ");
-        Serial.print(WiFi.RSSI(i));
-        Serial.print("dBm, ");
-        Serial.print(constrain(2 * (WiFi.RSSI(i) + 100), 0, 100));
-        Serial.print("% ");
-        Serial.print((WiFi.encryptionType(i) == WIFI_AUTH_OPEN) ? "open       " : "encrypted  ");
-        Serial.println(WiFi.SSID(i));
-        if ((WiFi.RSSI(i) > rssi_strongest) && (WiFi.SSID(i)=="OMS_OUTDOOR" || WiFi.SSID(i)=="FRITZ!Box 7560 QW")) {
-          rssi_strongest = WiFi.RSSI(i);
-          i_strongest = i;
-        delay(10);
-        }
-      } 
-      Serial.println();
-      WiFi.mode(WIFI_STA);
-      WiFi.begin(WiFi.SSID(i_strongest).c_str(), password, 0, WiFi.BSSID(i_strongest));
-      while (WiFi.waitForConnectResult() != WL_CONNECTED) {
-        Serial.println("Connection Failed! Rebooting...");
-        delay(5000);
-        ESP.restart();
-        }
-      Serial.print("BSSID: ");
-      Serial.print(WiFi.BSSIDstr(i_strongest));
-      Serial.print("  ");
-      Serial.print("SSID: ");
-      Serial.println(WiFi.SSID(i_strongest));
-      }
-}
+/**
+ * @brief 
+ * 
+ * @param nameprefix 
+ * @param ssid 
+ * @param password 
+ */
 
-void setupOTA() {
-  
-  handleWiFi();
+void setupOTA(const char* nameprefix, const char* ssid, const char* password) {
+  // Configure the hostname
+  uint16_t maxlen = strlen(nameprefix) + 7;
+  char *fullhostname = new char[maxlen];
+  uint8_t mac[6];
+  WiFi.macAddress(mac);
+  snprintf(fullhostname, maxlen, "%s-%02x%02x%02x", nameprefix, mac[3], mac[4], mac[5]);
+  ArduinoOTA.setHostname(fullhostname);
+  delete[] fullhostname;
+
+  // Configure and start the WiFi station
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+
+  // Wait for connection
+  while (WiFi.waitForConnectResult() != WL_CONNECTED) {
+    Serial.println("Connection Failed! Rebooting...");
+    delay(5000);
+    ESP.restart();
+  }
 
   // Port defaults to 3232
   // ArduinoOTA.setPort(3232); // Use 8266 port if you are working in Sloeber IDE, it is fixed there and not adjustable
